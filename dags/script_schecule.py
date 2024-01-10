@@ -2,7 +2,6 @@ from airflow import DAG
 from datetime import datetime,timedelta
 from airflow.operators.python import PythonOperator
 import sys
-sys.path.append('/home/haboubi/Desktop/projects/test_project/betting_scalping/apache_airflow/python_files')
 from scalping_test import start_scraping
 
 
