@@ -1,0 +1,145 @@
+# Copyright VMware, Inc.
+# SPDX-License-Identifier: APACHE-2.0
+
+version: '2'
+
+services:
+  postgresql:
+    image: docker.io/bitnami/postgresql:16
+    volumes:
+      - 'postgresql_data:/bitnami/postgresql'
+    environment:
+      - POSTGRESQL_DATABASE=bitnami_airflow
+      - POSTGRESQL_USERNAME=bn_airflow
+      - POSTGRESQL_PASSWORD=bitnami1
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      - ALLOW_EMPTY_PASSWORD=yes
+    networks:
+      - airflow  
+  redis:
+    image: docker.io/bitnami/redis:7.0
+    volumes:
+      - 'redis_data:/bitnami'
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      - ALLOW_EMPTY_PASSWORD=yes
+    networks:
+      - airflow  
+  airflow-scheduler:
+    build: ./airflow_scheduler
+    environment:
+      - AIRFLOW_FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW_SECRET_KEY=a25mQ1FHTUh3MnFRSk5KMEIyVVU2YmN0VGRyYTVXY08=
+      - AIRFLOW_DATABASE_NAME=bitnami_airflow
+      - AIRFLOW_DATABASE_USERNAME=bn_airflow
+      - AIRFLOW_DATABASE_PASSWORD=bitnami1
+      - AIRFLOW_EXECUTOR=CeleryExecutor
+      - AIRFLOW_WEBSERVER_HOST=airflow
+      - AIRFLOW_LOAD_EXAMPLES=no
+    volumes:
+      - airflow_data:/bitnami
+      - ./dags:/opt/bitnami/airflow/dags
+      - ./plugins:/opt/bitnami/airflow/plugins
+      - ./db_backups:/opt/bitnami/airflow/db_backups
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./requirements/requirements.txt:/bitnami/python
+    networks:
+      - airflow  
+  airflow-worker:
+    build: ./airflow_worker
+    environment:
+      - AIRFLOW_FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW_SECRET_KEY=a25mQ1FHTUh3MnFRSk5KMEIyVVU2YmN0VGRyYTVXY08=
+      - AIRFLOW_DATABASE_NAME=bitnami_airflow
+      - AIRFLOW_DATABASE_USERNAME=bn_airflow
+      - AIRFLOW_DATABASE_PASSWORD=bitnami1
+      - AIRFLOW_EXECUTOR=CeleryExecutor
+      - AIRFLOW_WEBSERVER_HOST=airflow
+      - AIRFLOW_LOAD_EXAMPLES=no
+    networks:
+      - airflow
+    volumes:
+      - airflow_data:/bitnami
+      - ./dags:/opt/bitnami/airflow/dags
+      - ./plugins:/opt/bitnami/airflow/plugins
+      - ./db_backups:/opt/bitnami/airflow/db_backups
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./requirements:/bitnami/python
+
+  airflow:
+    image: airflow/img:latest
+    environment:
+      - AIRFLOW_FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW_SECRET_KEY=a25mQ1FHTUh3MnFRSk5KMEIyVVU2YmN0VGRyYTVXY08=
+      - AIRFLOW_DATABASE_NAME=bitnami_airflow
+      - AIRFLOW_DATABASE_USERNAME=bn_airflow
+      - AIRFLOW_DATABASE_PASSWORD=bitnami1
+      - AIRFLOW_EXECUTOR=CeleryExecutor
+    networks:
+      - airflow
+    volumes:
+      - airflow_data:/bitnami
+      - ./dags:/opt/bitnami/airflow/dags
+      - ./plugins:/opt/bitnami/airflow/plugins
+      - ./db_backups:/opt/bitnami/airflow/db_backups
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./requirements:/bitnami/python
+
+    ports:
+      - '8080:8080'
+  selenium-hub:
+    image: selenium/hub:4.1.0-prerelease-20211105
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+    networks:
+      airflow :
+        ipv4_address: 172.21.0.10
+  chrome:
+    image: selenium/node-chrome:latest
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+    ports:
+      - "6900:5900"
+    restart: always
+    networks:
+      - airflow    
+  mongodb:
+    image: mongo
+    networks:
+      airflow :
+        ipv4_address: 172.21.0.11
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongodb:/data/db  
+
+volumes:
+  airflow_scheduler_data:
+    driver: local
+  airflow_worker_data:
+    driver: local
+  airflow_data:
+    driver: local
+  postgresql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+    
+networks:
+  airflow:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/24
